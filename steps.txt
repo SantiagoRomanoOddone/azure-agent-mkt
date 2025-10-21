@@ -1,0 +1,13 @@
+1. Create the environment
+    python -m venv labenv
+
+2. Activate the environment
+    .\labenv\Scripts\activate.bat ( or ./labenv/bin/Activate.ps1 for Mac )
+
+3. Install requirements
+    pip install -r requirements.txt 
+
+4. Add endpoint to .env
+
+5. Login to AZ 
+    az login
