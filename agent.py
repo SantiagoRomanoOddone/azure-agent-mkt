@@ -1,75 +1,56 @@
-import os
-from dotenv import load_dotenv
-from azure.identity import DefaultAzureCredential
-from azure.ai.agents import AgentsClient
-from azure.ai.agents.models import ConnectedAgentTool, MessageRole, ListSortOrder, ToolSet, FunctionTool
-from agent_functions import agent_functions
+import asyncio
+from typing import cast
+from agent_framework import ChatMessage, Role, SequentialBuilder, WorkflowOutputEvent
+from agent_framework.azure import AzureAIAgentClient
+from azure.identity import AzureCliCredential
 
-os.system('cls' if os.name=='nt' else 'clear')
-load_dotenv()
+async def main():
+    # Child agent instructions
+    table_agent_instructions = """
+    You handle queries on 'contractual' and 'earned' tables.
+    First validate the table and columns using get_table_schema().
+    Then generate and execute a SQL query and return the result.
+    """
 
-project_endpoint = os.getenv("PROJECT_ENDPOINT")
-model_deployment = os.getenv("MODEL_DEPLOYMENT_NAME")
+    # Main orchestrator instructions
+    main_agent_instructions = """
+    You are the orchestrator. Analyze the user request.
+    If it involves tables, delegate to the 'table_agent'.
+    Return the table_agent response to the user.
+    """
 
-agents_client = AgentsClient(
-    endpoint=project_endpoint,
-    credential=DefaultAzureCredential(
-        exclude_environment_credential=True,
-        exclude_managed_identity_credential=True
-    ),
-)
+    # Connect to Azure AI
+    credential = AzureCliCredential()
+    async with AzureAIAgentClient(async_credential=credential) as chat_client:
 
-with agents_client:
-    # Table agent
-    functions = FunctionTool(agent_functions)
-    toolset = ToolSet()
-    toolset.add(functions)
-    agents_client.enable_auto_function_calls(toolset)
+        # Create child table agent
+        table_agent = chat_client.create_agent(
+            name="table_agent",
+            instructions=table_agent_instructions
+        )
 
-    table_agent = agents_client.create_agent(
-        model=model_deployment,
-        name="table_agent",
-        instructions="You handle queries on 'contractual' and 'earned' tables using get_table_schema() first.",
-        toolset=toolset
-    )
-    table_agent_tool = ConnectedAgentTool(
-        id=table_agent.id,
-        name="table_agent",
-        description="Handles table queries and schema checks"
-    )
+        # Create main orchestrator agent
+        main_agent = chat_client.create_agent(
+            name="main_agent",
+            instructions=main_agent_instructions
+        )
 
-    # Orchestrator agent
-    orchestrator = agents_client.create_agent(
-        model=model_deployment,
-        name="orchestrator_agent",
-        instructions="You analyze user requests and call the 'table_agent' if needed, then return its response.",
-        tools=[table_agent_tool.definitions[0]]
-    )
+        # Build sequential workflow: main_agent first, table_agent second
+        workflow = SequentialBuilder().participants([main_agent, table_agent]).build()
 
-    # Thread
-    thread = agents_client.threads.create()
-    prompt = "give me the total value of the ME_value of the earned table"
+        # User prompt
+        prompt = "Give me the total value of ME_value in the earned table"
 
-    agents_client.messages.create(
-        thread_id=thread.id,
-        role=MessageRole.USER,
-        content=prompt
-    )
+        outputs: list[list[ChatMessage]] = []
+        async for event in workflow.run_stream(prompt):
+            if isinstance(event, WorkflowOutputEvent):
+                outputs.append(cast(list[ChatMessage], event.data))
 
-    run = agents_client.runs.create_and_process(
-        thread_id=thread.id,
-        agent_id=orchestrator.id
-    )
+        # Print results
+        if outputs:
+            for i, msg in enumerate(outputs[-1], start=1):
+                name = msg.author_name or ("assistant" if msg.role == Role.ASSISTANT else "user")
+                print(f"{'-'*60}\n{i:02d} [{name}]\n{msg.text}")
 
-    if run.status == "failed":
-        print(f"Run failed: {run.last_error}")
-
-    messages = agents_client.messages.list(thread_id=thread.id, order=ListSortOrder.ASCENDING)
-    for message in messages:
-        if message.text_messages:
-            last_msg = message.text_messages[-1]
-            print(f"{message.role}:\n{last_msg.text.value}\n")
-
-    # Cleanup
-    agents_client.delete_agent(orchestrator.id)
-    agents_client.delete_agent(table_agent.id)
+if __name__ == "__main__":
+    asyncio.run(main())
