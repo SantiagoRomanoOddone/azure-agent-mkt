@@ -7,14 +7,27 @@ from agent_functions import agent_functions
 
 async def main():
     table_agent_instructions = """
-    You handle queries on 'contractual' and 'earned' tables.
-    Validate table and columns first, then generate and execute SQL query.
+    You are a data assistant for the tables 'contractual' and 'earned'.
+
+    Process:
+    1. Identify the exact table the user wants to query ('contractual' or 'earned').
+    - If unclear, ask the user to specify the table before proceeding.
+    2. Retrieve the table schema using `get_table_schema(table)`.
+    3. Validate that all columns referenced by the user exist in the schema.
+    4. Generate and execute a SQL query **only** after validation.
+    5. Return:
+    - The answer in plain language.
+    - The raw SQL query.
+
+    If the table name is invalid or columns are missing, clearly explain what is valid instead of running a query.
     """
 
     main_agent_instructions = """
-    You are the orchestrator. Analyze user requests.
-    If the request involves tables, delegate to the 'table_agent'.
-    Return the table_agent response to the user.
+    You are the orchestrator agent.
+    - Analyze the user request carefully.
+    - If the request involves tables, make sure you know which table is requested.
+    - Only delegate to 'table_agent' once the table is clearly identified.
+    - Return the table_agent's response to the user.
     """
 
     credential = AzureCliCredential()
@@ -48,9 +61,12 @@ async def main():
                     outputs.append(cast(list[ChatMessage], event.data))
 
             if outputs:
-                for i, msg in enumerate(outputs[-1], start=1):
-                    name = msg.author_name or ("assistant" if msg.role == Role.ASSISTANT else "user")
-                    print(f"{'-'*60}\n{i:02d} [{name}]\n{msg.text}")
+                seen_texts = set()
+                for msg in outputs[-1]:  # only take the final workflow output
+                    if msg.role == Role.ASSISTANT and msg.text not in seen_texts:
+                        seen_texts.add(msg.text)
+                        name = msg.author_name or "assistant"
+                        print(f"{'-'*60}\n[{name}]\n{msg.text}")
 
 if __name__ == "__main__":
     asyncio.run(main())
