@@ -1,115 +1,75 @@
 import os
 from dotenv import load_dotenv
-from typing import Any
-from pathlib import Path
-
-
-# Add references
 from azure.identity import DefaultAzureCredential
 from azure.ai.agents import AgentsClient
-from azure.ai.agents.models import FunctionTool, ToolSet, ListSortOrder, MessageRole
+from azure.ai.agents.models import ConnectedAgentTool, MessageRole, ListSortOrder, ToolSet, FunctionTool
 from agent_functions import agent_functions
 
-def main(): 
+os.system('cls' if os.name=='nt' else 'clear')
+load_dotenv()
 
-    # Clear the console
-    os.system('cls' if os.name=='nt' else 'clear')
+project_endpoint = os.getenv("PROJECT_ENDPOINT")
+model_deployment = os.getenv("MODEL_DEPLOYMENT_NAME")
 
-    # Load environment variables from .env file
-    load_dotenv()
-    project_endpoint= os.getenv("PROJECT_ENDPOINT")
-    model_deployment = os.getenv("MODEL_DEPLOYMENT_NAME")
-
-
-    # Connect to the Agent client
-    agent_client = AgentsClient(
+agents_client = AgentsClient(
     endpoint=project_endpoint,
-    credential=DefaultAzureCredential
-        (exclude_environment_credential=True,
-         exclude_managed_identity_credential=True)
+    credential=DefaultAzureCredential(
+        exclude_environment_credential=True,
+        exclude_managed_identity_credential=True
+    ),
+)
+
+with agents_client:
+    # Table agent
+    functions = FunctionTool(agent_functions)
+    toolset = ToolSet()
+    toolset.add(functions)
+    agents_client.enable_auto_function_calls(toolset)
+
+    table_agent = agents_client.create_agent(
+        model=model_deployment,
+        name="table_agent",
+        instructions="You handle queries on 'contractual' and 'earned' tables using get_table_schema() first.",
+        toolset=toolset
+    )
+    table_agent_tool = ConnectedAgentTool(
+        id=table_agent.id,
+        name="table_agent",
+        description="Handles table queries and schema checks"
     )
 
+    # Orchestrator agent
+    orchestrator = agents_client.create_agent(
+        model=model_deployment,
+        name="orchestrator_agent",
+        instructions="You analyze user requests and call the 'table_agent' if needed, then return its response.",
+        tools=[table_agent_tool.definitions[0]]
+    )
 
-    # Define an agent that can use the custom functions
-    with agent_client:
-        # Adds your set of custom functions to a toolset
-        functions = FunctionTool(agent_functions)
-        toolset = ToolSet()
-        toolset.add(functions)
-        agent_client.enable_auto_function_calls(toolset)
-        
-        # Creates an agent that uses the toolset.
-        agent = agent_client.create_agent(
-            model=model_deployment,
-            name="table-agent",
-            instructions="""
-            You are a data assistant that interacts with two possible tables: 'contractual' and 'earned'.
+    # Thread
+    thread = agents_client.threads.create()
+    prompt = "give me the total value of the ME_value of the earned table"
 
-            Follow this exact process:
-            1. Identify which table the user wants to query. It can only be 'contractual' or 'earned'.  
-            - If unclear, ask the user to specify the table.
-            2. Call `get_table_schema(table)` with the chosen table name to retrieve its schema.
-            3. Validate that all columns mentioned in the question exist in that schema.
-            4. Generate a valid SQL query **only** after confirming the schema.
-            5. Execute the SQL query using `execute_sql()` and return:
-            - The answer in plain language.
-            - The raw SQL query used.
+    agents_client.messages.create(
+        thread_id=thread.id,
+        role=MessageRole.USER,
+        content=prompt
+    )
 
-            If the table name is invalid or columns don’t exist, clearly explain what is valid instead of running a query.
-            """,
-            toolset=toolset
-        )
+    run = agents_client.runs.create_and_process(
+        thread_id=thread.id,
+        agent_id=orchestrator.id
+    )
 
-        # Runs a thread with a prompt message from the user.
-        thread = agent_client.threads.create()
-        print(f"You're chatting with: {agent.name} ({agent.id})")
+    if run.status == "failed":
+        print(f"Run failed: {run.last_error}")
 
-        # Loop until the user types 'quit'
-        while True:
-            # Get input text
-            user_prompt = input("Enter a prompt (or type 'quit' to exit): ")
-            if user_prompt.lower() == "quit":
-                break
-            if len(user_prompt) == 0:
-                print("Please enter a prompt.")
-                continue
+    messages = agents_client.messages.list(thread_id=thread.id, order=ListSortOrder.ASCENDING)
+    for message in messages:
+        if message.text_messages:
+            last_msg = message.text_messages[-1]
+            print(f"{message.role}:\n{last_msg.text.value}\n")
 
-            # Send a prompt to the agent
-            message = agent_client.messages.create(
-            thread_id=thread.id,
-            role="user",
-            content=user_prompt
-            )
-            #Using the create_and_process method to run the thread enables the agent to automatically 
-            #find your functions and choose to use them based on their names and parameters.
-            run = agent_client.runs.create_and_process(thread_id=thread.id, agent_id=agent.id)
-
-            # Checks the status of the run in case there’s a failure
-            if run.status == "failed":
-                print(f"Run failed: {run.last_error}")
-                
-            # Retrieves the messages from the completed thread and displays the last one sent by the agent.
-            last_msg = agent_client.messages.get_last_message_text_by_role(
-            thread_id=thread.id,
-            role=MessageRole.AGENT,
-            )
-            if last_msg:
-                print(f"Last Message: {last_msg.text.value}")
-
-        # Displays the conversation history
-        print("\nConversation Log:\n")
-        messages = agent_client.messages.list(thread_id=thread.id, order=ListSortOrder.ASCENDING)
-        for message in messages:
-            if message.text_messages:
-                last_msg = message.text_messages[-1]
-                print(f"{message.role}: {last_msg.text.value}\n")
-
-        # Deletes the agent and thread when they’re no longer required.
-        agent_client.delete_agent(agent.id)
-        print("Deleted agent")
-    
-
-
-
-if __name__ == '__main__': 
-    main()
+    # Cleanup
+    agents_client.delete_agent(orchestrator.id)
+    agents_client.delete_agent(table_agent.id)
