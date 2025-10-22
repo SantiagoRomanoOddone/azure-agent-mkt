@@ -3,54 +3,54 @@ from typing import cast
 from agent_framework import ChatMessage, Role, SequentialBuilder, WorkflowOutputEvent
 from agent_framework.azure import AzureAIAgentClient
 from azure.identity import AzureCliCredential
+from agent_functions import agent_functions 
 
 async def main():
-    # Child agent instructions
     table_agent_instructions = """
     You handle queries on 'contractual' and 'earned' tables.
-    First validate the table and columns using get_table_schema().
-    Then generate and execute a SQL query and return the result.
+    Validate table and columns first, then generate and execute SQL query.
     """
 
-    # Main orchestrator instructions
     main_agent_instructions = """
-    You are the orchestrator. Analyze the user request.
-    If it involves tables, delegate to the 'table_agent'.
+    You are the orchestrator. Analyze user requests.
+    If the request involves tables, delegate to the 'table_agent'.
     Return the table_agent response to the user.
     """
 
-    # Connect to Azure AI
     credential = AzureCliCredential()
-    async with AzureAIAgentClient(async_credential=credential) as chat_client:
 
-        # Create child table agent
+    async with AzureAIAgentClient(async_credential=credential) as chat_client:
+        # --- Table agent with its functions (tools) ---
         table_agent = chat_client.create_agent(
             name="table_agent",
-            instructions=table_agent_instructions
+            instructions=table_agent_instructions,
+            tools=agent_functions  
         )
 
-        # Create main orchestrator agent
+        # --- Main orchestrator agent ---
         main_agent = chat_client.create_agent(
             name="main_agent",
             instructions=main_agent_instructions
         )
 
-        # Build sequential workflow: main_agent first, table_agent second
+        # --- Workflow ---
         workflow = SequentialBuilder().participants([main_agent, table_agent]).build()
 
-        # User prompt
-        prompt = "Give me the total value of ME_value in the earned table"
+        print("Chat with the multi-agent system. Type 'quit' to exit.\n")
+        while True:
+            user_input = input("Enter a prompt: ")
+            if user_input.lower() == "quit":
+                break
 
-        outputs: list[list[ChatMessage]] = []
-        async for event in workflow.run_stream(prompt):
-            if isinstance(event, WorkflowOutputEvent):
-                outputs.append(cast(list[ChatMessage], event.data))
+            outputs: list[list[ChatMessage]] = []
+            async for event in workflow.run_stream(user_input):
+                if isinstance(event, WorkflowOutputEvent):
+                    outputs.append(cast(list[ChatMessage], event.data))
 
-        # Print results
-        if outputs:
-            for i, msg in enumerate(outputs[-1], start=1):
-                name = msg.author_name or ("assistant" if msg.role == Role.ASSISTANT else "user")
-                print(f"{'-'*60}\n{i:02d} [{name}]\n{msg.text}")
+            if outputs:
+                for i, msg in enumerate(outputs[-1], start=1):
+                    name = msg.author_name or ("assistant" if msg.role == Role.ASSISTANT else "user")
+                    print(f"{'-'*60}\n{i:02d} [{name}]\n{msg.text}")
 
 if __name__ == "__main__":
     asyncio.run(main())

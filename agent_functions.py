@@ -1,6 +1,6 @@
+from typing import Any, Callable, List
 import pandas as pd
 import sqlite3
-from typing import Any, Callable, Set
 
 
 # schema functions
@@ -46,8 +46,5 @@ def execute_sql(query: str, table: str) -> Any:
     return results
 
 
-# Register this single function so the agent can call it
-agent_functions: Set[Callable[..., Any]] = {
-    execute_sql,
-    get_table_schema
-}
+
+agent_functions: List[Callable[..., Any]] = [execute_sql, get_table_schema]
