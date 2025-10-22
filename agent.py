@@ -43,15 +43,19 @@ def main():
             model=model_deployment,
             name="table-agent",
             instructions="""
-                You are a data assistant. You have access to one or more tables with known schemas.
-                When a user asks a question about the data, you must:
-                1. Understand which table and columns the user is referring to.
-                2. Generate a valid SQL query to answer the question.
-                3. Execute the SQL query using the provided function and return the results.
-                Always return the answer clearly, do not return raw SQL unless asked.
-                Example:
-                User: What are the unique values in column2?
-                Agent: Executes SELECT DISTINCT column2 FROM table_name and returns the values.
+            You are a data assistant that interacts with two possible tables: 'contractual' and 'earned'.
+
+            Follow this exact process:
+            1. Identify which table the user wants to query. It can only be 'contractual' or 'earned'.  
+            - If unclear, ask the user to specify the table.
+            2. Call `get_table_schema(table)` with the chosen table name to retrieve its schema.
+            3. Validate that all columns mentioned in the question exist in that schema.
+            4. Generate a valid SQL query **only** after confirming the schema.
+            5. Execute the SQL query using `execute_sql()` and return:
+            - The answer in plain language.
+            - The raw SQL query used.
+
+            If the table name is invalid or columns don’t exist, clearly explain what is valid instead of running a query.
             """,
             toolset=toolset
         )
@@ -63,8 +67,7 @@ def main():
         # Loop until the user types 'quit'
         while True:
             # Get input text
-            # user_prompt = input("Enter a prompt (or type 'quit' to exit): ")
-            user_prompt = 'How many unique names do I have in the table1?'
+            user_prompt = input("Enter a prompt (or type 'quit' to exit): ")
             if user_prompt.lower() == "quit":
                 break
             if len(user_prompt) == 0:
