@@ -66,7 +66,7 @@ async def main():
     .on_event(on_event, mode=MagenticCallbackMode.STREAMING)
     .with_standard_manager(
         chat_client=AzureAIAgentClient(async_credential=credential),
-        max_round_count=10,
+        max_round_count=5,
         max_stall_count=3,
         max_reset_count=2
     )
