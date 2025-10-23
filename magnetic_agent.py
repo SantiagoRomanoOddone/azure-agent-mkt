@@ -37,7 +37,7 @@ async def main():
         chat_client=AzureAIAgentClient(async_credential=credential)
     )
 
-    # --- Callback para streaming ---
+    # --- Callback for streaming ---
     last_stream_agent_id: str | None = None
     stream_line_open: bool = False
 
@@ -59,7 +59,7 @@ async def main():
                 print(event.message.text)
             print("="*50)
 
-    # --- Construir workflow ---
+    # --- workflow ---
     workflow = (
     MagenticBuilder()
     .participants(main=main_agent, table=table_agent)
@@ -79,7 +79,7 @@ async def main():
         if user_input.lower() == "quit":
             break
         async for event in workflow.run_stream(user_input):
-            pass  # todo: eventos ya son manejados por el callback
+            pass  # TODO 
 
 if __name__ == "__main__":
     asyncio.run(main())
