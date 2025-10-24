@@ -17,8 +17,8 @@ def main():
 
     # Load environment variables from .env file
     load_dotenv()
-    project_endpoint= os.getenv("PROJECT_ENDPOINT")
-    model_deployment = os.getenv("MODEL_DEPLOYMENT_NAME")
+    project_endpoint= os.getenv("AZURE_AI_PROJECT_ENDPOINT")
+    model_deployment = os.getenv("AZURE_AI_MODEL_DEPLOYMENT_NAME")
 
 
     # Connect to the Agent client
