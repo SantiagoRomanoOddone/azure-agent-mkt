@@ -12,7 +12,7 @@ async def main():
     Process:
     1. Identify the exact table the user wants to query ('contractual' or 'earned').
     - If unclear, ask the user to specify the table before proceeding.
-    2. Retrieve the table schema using `get_table_schema(table)`.
+    2. Retrieve the table schema using `get_table_schema(table)` which returns each column’s name, data type, and description. Use the description to provide more context when generating answers or SQL.
     3. Validate that all columns referenced by the user exist in the schema.
     4. Generate and execute a SQL query **only** after validation.
     5. Return:
@@ -21,6 +21,7 @@ async def main():
 
     If the table name is invalid or columns are missing, clearly explain what is valid instead of running a query.
     """
+
 
     main_agent_instructions = """
     You are the orchestrator agent.
