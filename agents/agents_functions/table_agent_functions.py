@@ -183,9 +183,9 @@ def preprocess_chart_data(data, columns=None):
 
 def plot_results(data, columns=None, chart_type="bar", save_path="chart.png", figsize=(8,5), palette="Blues_d"):
     """
-    Creates a professional-looking chart from SQL results.
-    - chart_type: "bar", "line", "pie"
-    - Returns saved file path.
+    Creates a professional, presentation-ready chart from SQL results.
+    - chart_type: "bar", "line", or "pie"
+    - Automatically infers meaningful title from column names.
     """
     try:
         df = preprocess_chart_data(data, columns)
@@ -195,28 +195,32 @@ def plot_results(data, columns=None, chart_type="bar", save_path="chart.png", fi
     plt.figure(figsize=figsize)
     ax = plt.gca()
 
+    label_col, value_col = df.columns[0], df.columns[1]
+    title = f"{value_col} by {label_col}"
+
     if chart_type == "bar":
-        df_plot = df.set_index(df.columns[0])
-        df_plot[df.columns[1]].plot(kind="bar", ax=ax, color=sns.color_palette(palette, len(df_plot)))
-        ax.set_ylabel(df.columns[1])
+        df_plot = df.set_index(label_col)
+        df_plot[value_col].plot(kind="bar", ax=ax, color=sns.color_palette(palette, len(df_plot)))
+        ax.set_ylabel(value_col)
     elif chart_type == "line":
-        df_plot = df.set_index(df.columns[0])
-        df_plot[df.columns[1]].plot(kind="line", ax=ax, marker='o', color=sns.color_palette(palette, len(df_plot))[0])
-        ax.set_ylabel(df.columns[1])
+        df_plot = df.set_index(label_col)
+        df_plot[value_col].plot(kind="line", ax=ax, marker='o', color=sns.color_palette(palette, len(df_plot))[0])
+        ax.set_ylabel(value_col)
     elif chart_type == "pie":
-        df_plot = df.set_index(df.columns[0])
-        df_plot[df.columns[1]].plot(kind="pie", ax=ax, autopct='%1.1f%%', colors=sns.color_palette(palette, len(df_plot)))
+        df_plot = df.set_index(label_col)
+        df_plot[value_col].plot(kind="pie", ax=ax, autopct='%1.1f%%', colors=sns.color_palette(palette, len(df_plot)))
         ax.set_ylabel("")
     else:
         return "Unsupported chart type."
-    
-    ax.set_xlabel(df.columns[0])
-    plt.title(f"{chart_type.capitalize()} Chart of {df.columns[1]}", fontsize=14)
-    plt.xticks(rotation=45, ha='right')
+
+    ax.set_xlabel(label_col)
+    plt.title(title, fontsize=14, fontweight="bold")
+    plt.xticks(rotation=45, ha="right")
     plt.tight_layout()
     plt.savefig(save_path, dpi=300)
     plt.close()
     return f"Chart saved to {save_path}"
+
 
 
 # table_agent_functions: List[Callable[..., Any]] = [execute_sql, get_table_schema]
