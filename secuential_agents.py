@@ -3,7 +3,7 @@ from typing import cast
 from agent_framework import ChatMessage, Role, SequentialBuilder, WorkflowOutputEvent
 from agent_framework.azure import AzureAIAgentClient
 from azure.identity import AzureCliCredential
-from agent_functions import agent_functions 
+from agent_functions.table_agent_functions import table_agent_functions
 
 async def main():
     table_agent_instructions = """
@@ -38,7 +38,7 @@ async def main():
         table_agent = chat_client.create_agent(
             name="table_agent",
             instructions=table_agent_instructions,
-            tools=agent_functions  
+            tools=table_agent_functions  
         )
 
         # --- Main orchestrator agent ---
@@ -71,3 +71,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+

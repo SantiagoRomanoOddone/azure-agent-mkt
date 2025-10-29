@@ -121,7 +121,6 @@ def get_table_schema(table: str) -> Any:
     return schema
 
 
-
 def execute_sql(query: str, table: str) -> Any:
     """
     Executes a SQL query on the specified table's CSV data.
@@ -148,4 +147,4 @@ def execute_sql(query: str, table: str) -> Any:
 
 
 
-agent_functions: List[Callable[..., Any]] = [execute_sql, get_table_schema]
+table_agent_functions: List[Callable[..., Any]] = [execute_sql, get_table_schema]
