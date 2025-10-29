@@ -20,14 +20,15 @@ async def main():
             tools=table_agent_functions  
         )
 
-        # --- Main orchestrator agent ---
-        main_agent = chat_client.create_agent(
-            name="main_agent",
-            instructions=instructions["main_agent_instructions"]
-        )
+        # # --- Main orchestrator agent ---
+        # main_agent = chat_client.create_agent(
+        #     name="main_agent",
+        #     instructions=instructions["main_agent_instructions"]
+        # )
 
         # --- Workflow ---
-        workflow = SequentialBuilder().participants([main_agent, table_agent]).build()
+        # workflow = SequentialBuilder().participants([main_agent, table_agent]).build()
+        workflow = SequentialBuilder().participants([table_agent]).build()
 
         print("Chat with the multi-agent system. Type 'quit' to exit.\n")
         while True:

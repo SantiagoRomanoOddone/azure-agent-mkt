@@ -1,6 +1,12 @@
 from typing import Any, Callable, List
 import pandas as pd
 import sqlite3
+import matplotlib.pyplot as plt
+import io
+import ast, io, base64
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 column_descriptions = {
         "contractual": {
@@ -146,5 +152,72 @@ def execute_sql(query: str, table: str) -> Any:
     return results
 
 
+def preprocess_chart_data(data, columns=None):
+    """
+    Prepares data for plotting:
+    - Converts string to list if needed.
+    - Handles columns as string or list.
+    - Auto-generates column names if missing.
+    """
+    if not data:
+        raise ValueError("No data provided.")
+    
+    # Parse string data
+    if isinstance(data, str):
+        try:
+            data = ast.literal_eval(data.strip())
+        except Exception as e:
+            raise ValueError(f"Failed to parse data: {e}")
+    
+    if not isinstance(data, list) or not all(isinstance(r, (list, tuple)) for r in data):
+        raise ValueError("Data must be a list of lists or tuples.")
+    
+    # Handle columns
+    if isinstance(columns, str):
+        columns = [c.strip() for c in columns.split(",")]
+    
+    if columns is None:
+        columns = ["label", "value"] if len(data[0]) == 2 else [f"col{i}" for i in range(len(data[0]))]
+    
+    return pd.DataFrame(data, columns=columns)
 
-table_agent_functions: List[Callable[..., Any]] = [execute_sql, get_table_schema]
+def plot_results(data, columns=None, chart_type="bar", save_path="chart.png", figsize=(8,5), palette="Blues_d"):
+    """
+    Creates a professional-looking chart from SQL results.
+    - chart_type: "bar", "line", "pie"
+    - Returns saved file path.
+    """
+    try:
+        df = preprocess_chart_data(data, columns)
+    except ValueError as e:
+        return str(e)
+    
+    plt.figure(figsize=figsize)
+    ax = plt.gca()
+
+    if chart_type == "bar":
+        df_plot = df.set_index(df.columns[0])
+        df_plot[df.columns[1]].plot(kind="bar", ax=ax, color=sns.color_palette(palette, len(df_plot)))
+        ax.set_ylabel(df.columns[1])
+    elif chart_type == "line":
+        df_plot = df.set_index(df.columns[0])
+        df_plot[df.columns[1]].plot(kind="line", ax=ax, marker='o', color=sns.color_palette(palette, len(df_plot))[0])
+        ax.set_ylabel(df.columns[1])
+    elif chart_type == "pie":
+        df_plot = df.set_index(df.columns[0])
+        df_plot[df.columns[1]].plot(kind="pie", ax=ax, autopct='%1.1f%%', colors=sns.color_palette(palette, len(df_plot)))
+        ax.set_ylabel("")
+    else:
+        return "Unsupported chart type."
+    
+    ax.set_xlabel(df.columns[0])
+    plt.title(f"{chart_type.capitalize()} Chart of {df.columns[1]}", fontsize=14)
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    plt.close()
+    return f"Chart saved to {save_path}"
+
+
+# table_agent_functions: List[Callable[..., Any]] = [execute_sql, get_table_schema]
+table_agent_functions = [execute_sql, get_table_schema, plot_results]
