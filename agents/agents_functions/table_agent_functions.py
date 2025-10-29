@@ -181,7 +181,7 @@ def preprocess_chart_data(data, columns=None):
     
     return pd.DataFrame(data, columns=columns)
 
-def plot_results(data, columns=None, chart_type="bar", save_path="chart.png", figsize=(8,5), palette="Blues_d"):
+def plot_results(data, columns=None, chart_type="pie", save_path="chart.png", figsize=(8,5), palette="Blues_d"):
     """
     Creates a professional, presentation-ready chart from SQL results.
     - chart_type: "bar", "line", or "pie"
