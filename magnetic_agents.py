@@ -3,7 +3,12 @@ from typing import cast
 from agent_framework import ChatAgent, MagenticBuilder, MagenticCallbackEvent, MagenticCallbackMode, MagenticFinalResultEvent, MagenticOrchestratorMessageEvent, MagenticAgentDeltaEvent
 from agent_framework.azure import AzureAIAgentClient
 from azure.identity import AzureCliCredential
-from agent_functions import agent_functions
+from agents.agents_functions.table_agent_functions import table_agent_functions
+import yaml
+
+with open("agents/instructions/instructions.yaml", "r", encoding="utf-8") as f:
+    instructions = yaml.safe_load(f)
+
 
 async def main():
     credential = AzureCliCredential()
@@ -12,28 +17,15 @@ async def main():
     table_agent = ChatAgent(
         name="table_agent",
         description="Data assistant for tables 'contractual' and 'earned'",
-        instructions="""
-            You are a data assistant for the tables 'contractual' and 'earned'. 
-            Process:
-            1. Identify the exact table the user wants to query.
-            2. Retrieve schema via get_table_schema(table).
-            3. Validate columns.
-            4. Generate SQL after validation.
-            5. Return plain answer + raw SQL. 
-            Explain clearly if table/columns are invalid.
-        """,
+        instructions=instructions["table_agent_instructions"],
         chat_client=AzureAIAgentClient(async_credential=credential),
-        tools=agent_functions
+        tools=table_agent_functions
     )
 
     main_agent = ChatAgent(
         name="main_agent",
         description="Orchestrator agent",
-        instructions="""
-            You are the orchestrator agent.
-            Only delegate to 'table_agent' once the table is clearly identified.
-            Return the table_agent's response to the user.
-        """,
+        instructions=instructions["main_agent_instructions"],
         chat_client=AzureAIAgentClient(async_credential=credential)
     )
 
