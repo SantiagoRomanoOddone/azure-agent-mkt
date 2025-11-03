@@ -1,0 +1,77 @@
+import asyncio
+from typing import cast
+from agent_framework import ChatAgent, MagenticBuilder, MagenticCallbackEvent, MagenticCallbackMode, MagenticFinalResultEvent, MagenticOrchestratorMessageEvent, MagenticAgentDeltaEvent
+from agent_framework.azure import AzureAIAgentClient
+from azure.identity import AzureCliCredential
+from agents.agents_functions.table_agent_functions import table_agent_functions
+import yaml
+
+with open("agents/instructions/instructions.yaml", "r", encoding="utf-8") as f:
+    instructions = yaml.safe_load(f)
+
+
+async def main():
+    credential = AzureCliCredential()
+
+    # --- Define agents ---
+    table_agent = ChatAgent(
+        name="table_agent",
+        description="Data assistant for tables 'contractual' and 'earned'",
+        instructions=instructions["table_agent_instructions"],
+        chat_client=AzureAIAgentClient(async_credential=credential),
+        tools=table_agent_functions
+    )
+
+    main_agent = ChatAgent(
+        name="main_agent",
+        description="Orchestrator agent",
+        instructions=instructions["main_agent_instructions"],
+        chat_client=AzureAIAgentClient(async_credential=credential)
+    )
+
+    # --- Callback for streaming ---
+    last_stream_agent_id: str | None = None
+    stream_line_open: bool = False
+
+    async def on_event(event: MagenticCallbackEvent):
+        nonlocal last_stream_agent_id, stream_line_open
+        if isinstance(event, MagenticOrchestratorMessageEvent):
+            print(f"\n[ORCH:{event.kind}]\n{getattr(event.message, 'text', '')}\n{'-'*26}")
+        elif isinstance(event, MagenticAgentDeltaEvent):
+            if last_stream_agent_id != event.agent_id or not stream_line_open:
+                if stream_line_open: print()
+                print(f"\n[STREAM:{event.agent_id}]: ", end="", flush=True)
+                last_stream_agent_id = event.agent_id
+                stream_line_open = True
+            print(event.text, end="", flush=True)
+        elif isinstance(event, MagenticFinalResultEvent):
+            print("\n" + "="*50)
+            print("FINAL RESULT:")
+            if event.message is not None:
+                print(event.message.text)
+            print("="*50)
+
+    # --- workflow ---
+    workflow = (
+    MagenticBuilder()
+    .participants(main=main_agent, table=table_agent)
+    .on_event(on_event, mode=MagenticCallbackMode.STREAMING)
+    .with_standard_manager(
+        chat_client=AzureAIAgentClient(async_credential=credential),
+        max_round_count=5,
+        max_stall_count=3,
+        max_reset_count=2
+    )
+    .build()
+    )
+
+    print("Chat with the multi-agent system. Type 'quit' to exit.\n")
+    while True:
+        user_input = input("Enter a prompt: ")
+        if user_input.lower() == "quit":
+            break
+        async for event in workflow.run_stream(user_input):
+            pass  # TODO 
+
+if __name__ == "__main__":
+    asyncio.run(main())
